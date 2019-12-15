@@ -1,0 +1,221 @@
+/***
+ * Autonomous 4DOF Robot
+ * Code Description: Control code for Arduino-based mobile robot with arm.
+ * Hardware Required: 2-DC Motors with Encoders, L298N Motor Driver
+ * IDE version: 1.8.10
+ * Programmer name: Gene Nadela
+ * November 3, 2019
+ * v. 1.0.0
+ ***/
+
+// pre-processor directives
+#include <VarSpeedServo.h>
+
+// pin name definitions
+
+//Motor Control Pins
+const int enaPinL = 13; //PWM enable pin for left motor, Grey Wire, ENA-A
+const int in1PinL = 12;
+const int in2PinL = 11; //Orange Wire
+const int enaPinR = 10; //PWM enable pin for right motor, Grey Wire, ENA-B
+const int in1PinR = 9;
+const int in2PinR = 8; //Orange Wire
+
+//Motor Encoder Pins
+const int encAL = 18; //Encoder A, Left Motor
+//const int encBL = 19; //Encoder B, Left Motor
+const int encAR = 19; //Encoder A, Right Motor
+//const int encBR = 21; //Encoder B, Left Motor
+
+//Servo Control Pins
+const int servoShoulderPin = 7;
+const int servoElbowPin = 6;
+const int servoWristRotatePin = 5;
+const int servoWristLiftPin = 4;
+const int servoGripperPin = 3;
+
+// class/object declarations
+VarSpeedServo servoShoulder;
+VarSpeedServo servoElbow;
+VarSpeedServo servoWristRotation;
+VarSpeedServo servoWristLift;
+VarSpeedServo servoGripper;
+ 
+// function declarations
+void setMotorLeft(int speed, boolean reverse);
+void setMotorRight(int speed, boolean reverse);
+void fullStop();
+void moveForward();
+void moveBackward();
+void rotateCW();
+void rotateCCW();
+void translate(float dist);
+
+// global variables
+char command; //Receive character commands from remote control system
+const float encoderConstant = 3000;
+volatile unsigned long TotalMotorCountL = 0; //initialize left motor encoder count
+volatile unsigned long TotalMotorCountR = 0; //initialize right motor encoder count
+
+void setup() {
+  // configure hardware peripherals
+  //Motor Controls
+  pinMode(enaPinL, OUTPUT);
+  pinMode(in1PinL, OUTPUT);
+  pinMode(in2PinL, OUTPUT);
+  pinMode(enaPinR, OUTPUT);
+  pinMode(in1PinR, OUTPUT);
+  pinMode(in2PinR, OUTPUT);
+  
+  //MotorEncoder
+  pinMode(encAL, INPUT);
+  //pinMode(encBL, INPUT);
+  pinMode(encAR, INPUT);
+  //pinMode(encBR, INPUT);
+  
+  //MotorEncoder Interrupt Pins
+  attachInterrupt(digitalPinToInterrupt(encAL), countLeftMotor, FALLING);
+  attachInterrupt(digitalPinToInterrupt(encAR), countRightMotor, FALLING);
+
+  
+  
+  //Servo Motor Control
+  servoShoulder.attach(servoShoulderPin);
+  servoElbow.attach(servoElbowPin);
+  servoWristRotation.attach(servoWristRotatePin);
+  servoWristLift.attach(servoWristLiftPin);
+  servoGripper.attach(servoGripperPin);
+
+  //Servo Motor Initialized Position
+  servoShoulder.write(140, 10, false);
+  servoElbow.write(90, 10, false);
+  servoWristRotation.write(110, 10, false);
+  servoWristLift.write(0, 10, false);
+  servoGripper.write(45, 10, false);
+  
+  // configure data communication
+  Serial.begin(115200); //PC Serial Communication for Debugging
+  Serial3.begin(9600); //Bluetooth Serial Communication for Remote Control
+}
+
+void loop() {
+
+    if (Serial3.available() > 0) {
+      command = Serial3.read();
+        switch (command) {
+        
+        case '0':
+          fullStop();
+          Serial.print("Stop");
+        break;
+        
+        case  '1':
+          translate(0.2);
+          Serial.print("Forward");
+        break;
+        
+        case '2':
+          moveBackward();
+          Serial.print("Backward");
+        break;
+
+        case '3':
+          rotateCW(); //CW
+          Serial.print("CW");
+        break;
+
+        case '4':
+          rotateCCW(); //CCW
+          Serial.print("CCW");
+        break;
+        
+        default:
+        // do nothing for other command values
+        break;
+        }
+    }
+    
+
+  
+   // data input
+   
+   // data storage
+   
+   // data processing
+   
+   // data output
+   
+   // data communication
+   
+}
+
+//Function Definitions
+void setMotorLeft(int speed, boolean reverse){ //sets velocity of left motor
+  analogWrite(enaPinL, speed);
+  digitalWrite(in1PinL, !reverse);
+  digitalWrite(in2PinL, reverse);
+}
+void setMotorRight(int speed, boolean reverse){ //sets velocity of right motor
+  analogWrite(enaPinR, speed);
+  digitalWrite(in1PinR, !reverse);
+  digitalWrite(in2PinR, reverse);
+}
+void moveForward() { //Move Forward
+  setMotorLeft(115, false);
+  setMotorRight(115, false);
+}
+void moveBackward() { //Move Backward
+  setMotorLeft(100, true);
+  setMotorRight(100, true);
+}
+void rotateCW() { //Rotate Clockwise
+  setMotorLeft(127, true);
+  setMotorRight(127, false);
+}
+void rotateCCW() { //Rotate CounterClockwise
+  setMotorLeft(127, false);
+  setMotorRight(127, true);
+}
+void fullStop() { //Total Stop Robot
+  setMotorLeft(0, false);
+  setMotorRight(0, false);
+}
+void countLeftMotor() {
+  TotalMotorCountL++;
+}
+void countRightMotor() {
+  TotalMotorCountR++;
+}
+
+
+void translate(float dist) { //moves robot forward in meters
+  float encoderGoal = dist*encoderConstant;
+  TotalMotorCountL = 0; //initialize encoder value
+  TotalMotorCountR = 0; //initialize encoder value 
+  while(TotalMotorCountL < encoderGoal) {
+    moveForward();
+    Serial.print("TotalMotorCountL: ");
+    Serial.print(TotalMotorCountL);
+    Serial.print("   TotalMotorCountR: ");
+    Serial.print(TotalMotorCountR);
+    Serial.print("   EncoderGoal: ");
+    Serial.println(encoderGoal);
+  }
+  fullStop();
+}
+
+
+void translateBackwards(float dist) { //moves robot backwards in meters
+  float encoderGoal = dist*encoderConstant;
+  TotalMotorCountL = 0; //initialize encoder value 
+  while(TotalMotorCountL < encoderGoal) {
+    moveBackward();
+    Serial.print("TotalMotorCountL: ");
+    Serial.print(TotalMotorCountL);
+    Serial.print("   TotalMotorCountR: ");
+    Serial.print(TotalMotorCountR);
+    Serial.print("   EncoderGoal: ");
+    Serial.println(encoderGoal);
+  }
+  fullStop();
+}
