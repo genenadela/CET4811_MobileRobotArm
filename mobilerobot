@@ -10,6 +10,7 @@
 
 // pre-processor directives
 #include <VarSpeedServo.h>
+#include <math.h>
 
 // pin name definitions
 
@@ -32,7 +33,7 @@ const int servoShoulderPin = 7;
 const int servoElbowPin = 6;
 const int servoWristRotatePin = 5;
 const int servoWristLiftPin = 4;
-const int servoGripperPin = 3;
+const int servoGripperPin = 2;
 
 // class/object declarations
 VarSpeedServo servoShoulder;
@@ -54,6 +55,7 @@ void translate(float dist);
 // global variables
 char command; //Receive character commands from remote control system
 const float encoderConstant = 3000;
+const float encoderConstantAngle = 150;
 volatile unsigned long TotalMotorCountL = 0; //initialize left motor encoder count
 volatile unsigned long TotalMotorCountR = 0; //initialize right motor encoder count
 
@@ -77,8 +79,6 @@ void setup() {
   attachInterrupt(digitalPinToInterrupt(encAL), countLeftMotor, FALLING);
   attachInterrupt(digitalPinToInterrupt(encAR), countRightMotor, FALLING);
 
-  
-  
   //Servo Motor Control
   servoShoulder.attach(servoShoulderPin);
   servoElbow.attach(servoElbowPin);
@@ -110,23 +110,59 @@ void loop() {
         break;
         
         case  '1':
-          translate(0.2);
-          Serial.print("Forward");
+          translate(0.4);
+          Serial.print("Forward 40cm");
         break;
         
         case '2':
-          moveBackward();
-          Serial.print("Backward");
+          translateBackwards(0.4);
+          Serial.print("Backward 40cm");
         break;
 
         case '3':
-          rotateCW(); //CW
-          Serial.print("CW");
+          rotate(1.57); //CW 90 degrees
+          Serial.print("CW 90deg");
         break;
 
         case '4':
-          rotateCCW(); //CCW
-          Serial.print("CCW");
+          rotate(-1.57); //CCW 90 degrees
+          Serial.print("CCW 90deg");
+        break;
+
+        case '5':
+          rotate(0.26); //CW 15 degrees
+          Serial.print("CW 15deg");
+        break;
+
+        case '6':
+          rotate(-0.26); //CCW 15 degrees
+          Serial.print("CCW 15deg");
+        break;
+
+        case '7':
+          translate(0.1); //Forward 10 cm
+          Serial.print("Forward 10cm");
+        break;
+
+        case '8':
+          translateBackwards(0.1); //Backward 10 cm
+          Serial.print("Backward 10cm");
+        break;
+
+        case 'a':
+          armReachFront();
+        break;
+
+        case 'b':
+          armReset();
+        break;
+
+        case 'c':
+          gripOn();
+        break;
+
+        case 'd':
+          gripOff();
         break;
         
         default:
@@ -134,22 +170,34 @@ void loop() {
         break;
         }
     }
-    
-
-  
-   // data input
-   
-   // data storage
-   
-   // data processing
-   
-   // data output
-   
-   // data communication
-   
 }
 
 //Function Definitions
+
+void armReachFront() {
+  servoShoulder.write(40, 20, false);
+  servoElbow.write(110, 20, false);
+  servoWristRotation.write(110, 20, false);
+  servoWristLift.write(90, 20, false);
+  //servoGripper.write(45, 10, false);
+}
+
+void armReset() {
+  servoShoulder.write(140, 20, false);
+  servoElbow.write(90, 20, false);
+  servoWristRotation.write(110, 20, false);
+  servoWristLift.write(0, 20, false);
+  //servoGripper.write(45, 20, false);
+}
+
+void gripOn() {
+  servoGripper.write(0, 20, false);
+}
+
+void gripOff() {
+  servoGripper.write(45, 20, false);
+}
+
 void setMotorLeft(int speed, boolean reverse){ //sets velocity of left motor
   analogWrite(enaPinL, speed);
   digitalWrite(in1PinL, !reverse);
@@ -190,32 +238,123 @@ void countRightMotor() {
 
 void translate(float dist) { //moves robot forward in meters
   float encoderGoal = dist*encoderConstant;
-  TotalMotorCountL = 0; //initialize encoder value
-  TotalMotorCountR = 0; //initialize encoder value 
-  while(TotalMotorCountL < encoderGoal) {
-    moveForward();
-    Serial.print("TotalMotorCountL: ");
+  int encoderTotalCount = 0;
+  int speedMotorLeft = 115; //initialize left motor speed
+  int speedMotorRight = 100; //initialize right motor speed
+  TotalMotorCountL = 0; //initialize encoder value left
+  TotalMotorCountR = 0; //initialize encoder value right
+  int error = 0; //initialize error
+  float kp = 0.5; //constant of proportionality
+  while(encoderTotalCount < encoderGoal) {
+    setMotorLeft(speedMotorLeft, false);
+    setMotorRight(speedMotorRight, false);
+    error = TotalMotorCountL - TotalMotorCountR;
+    speedMotorRight += error/kp;
+    TotalMotorCountL = 0; //initialize encoder value left
+    TotalMotorCountR = 0; //initialize encoder value right 
+    Serial.print("TotalMotorL: ");
     Serial.print(TotalMotorCountL);
-    Serial.print("   TotalMotorCountR: ");
+    Serial.print("   TotalMotorR: ");
     Serial.print(TotalMotorCountR);
-    Serial.print("   EncoderGoal: ");
-    Serial.println(encoderGoal);
+    Serial.print("   LeftSpeed: ");
+    Serial.print(speedMotorLeft);
+    Serial.print("   RightSpeed: ");
+    Serial.print(speedMotorRight);
+    Serial.print("   Error: ");
+    Serial.println(error);
+    delay(10);
+    encoderTotalCount += TotalMotorCountL;
   }
   fullStop();
 }
 
-
 void translateBackwards(float dist) { //moves robot backwards in meters
   float encoderGoal = dist*encoderConstant;
-  TotalMotorCountL = 0; //initialize encoder value 
-  while(TotalMotorCountL < encoderGoal) {
-    moveBackward();
-    Serial.print("TotalMotorCountL: ");
+  int encoderTotalCount = 0;
+  int speedMotorLeft = 115; //initialize left motor speed
+  int speedMotorRight = 100; //initialize right motor speed
+  TotalMotorCountL = 0; //initialize encoder value left
+  TotalMotorCountR = 0; //initialize encoder value right
+  int error = 0; //initialize error
+  float kp = 0.5; //constant of proportionality
+  while(encoderTotalCount < encoderGoal) {
+    setMotorLeft(speedMotorLeft, true);
+    setMotorRight(speedMotorRight, true);
+    error = TotalMotorCountL - TotalMotorCountR;
+    speedMotorRight += error/kp;
+    TotalMotorCountL = 0; //initialize encoder value left
+    TotalMotorCountR = 0; //initialize encoder value right 
+    Serial.print("TotalMotorL: ");
     Serial.print(TotalMotorCountL);
-    Serial.print("   TotalMotorCountR: ");
+    Serial.print("   TotalMotorR: ");
     Serial.print(TotalMotorCountR);
-    Serial.print("   EncoderGoal: ");
-    Serial.println(encoderGoal);
+    Serial.print("   LeftSpeed: ");
+    Serial.print(speedMotorLeft);
+    Serial.print("   RightSpeed: ");
+    Serial.print(speedMotorRight);
+    Serial.print("   Error: ");
+    Serial.println(error);
+    delay(10);
+    encoderTotalCount += TotalMotorCountL;
   }
   fullStop();
+}
+
+void rotate(float angle) { //rotate robot in radians
+  float encoderGoal = fabs(angle*encoderConstantAngle);
+  int encoderTotalCount = 0;
+  int speedMotorLeft = 115; //initialize left motor speed
+  int speedMotorRight = 100; //initialize right motor speed
+  TotalMotorCountL = 0; //initialize encoder value left
+  TotalMotorCountR = 0; //initialize encoder value right
+  int error = 0; //initialize error
+  float kp = 0.5; //constant of proportionality
+
+  if (angle >= 0) {
+    while(encoderTotalCount < encoderGoal) {
+    setMotorLeft(speedMotorLeft, false);
+    setMotorRight(speedMotorRight, true);
+    error = TotalMotorCountL - TotalMotorCountR;
+    speedMotorRight += error/kp;
+    TotalMotorCountL = 0; //initialize encoder value left
+    TotalMotorCountR = 0; //initialize encoder value right 
+    Serial.print("TotalMotorL: ");
+    Serial.print(TotalMotorCountL);
+    Serial.print("   TotalMotorR: ");
+    Serial.print(TotalMotorCountR);
+    Serial.print("   LeftSpeed: ");
+    Serial.print(speedMotorLeft);
+    Serial.print("   RightSpeed: ");
+    Serial.print(speedMotorRight);
+    Serial.print("   Error: ");
+    Serial.println(error);
+    delay(10);
+    encoderTotalCount += TotalMotorCountL;
+    }
+  fullStop();
+  }
+  else {
+    while(encoderTotalCount < encoderGoal) {
+    setMotorLeft(speedMotorLeft, true);
+    setMotorRight(speedMotorRight, false);
+    error = TotalMotorCountL - TotalMotorCountR;
+    speedMotorRight += error/kp;
+    TotalMotorCountL = 0; //initialize encoder value left
+    TotalMotorCountR = 0; //initialize encoder value right 
+    Serial.print("TotalMotorL: ");
+    Serial.print(TotalMotorCountL);
+    Serial.print("   TotalMotorR: ");
+    Serial.print(TotalMotorCountR);
+    Serial.print("   LeftSpeed: ");
+    Serial.print(speedMotorLeft);
+    Serial.print("   RightSpeed: ");
+    Serial.print(speedMotorRight);
+    Serial.print("   Error: ");
+    Serial.println(error);
+    delay(10);
+    encoderTotalCount += TotalMotorCountL;
+    }
+  fullStop();
+  }
+  
 }
