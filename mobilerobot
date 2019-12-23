@@ -14,6 +14,10 @@
 
 // pin name definitions
 
+//Ultrasonic Sensor Pins
+const int pingTrig = 22;
+const int pingEcho = 23;
+
 //Motor Control Pins
 const int enaPinL = 13; //PWM enable pin for left motor, Grey Wire, ENA-A
 const int in1PinL = 12;
@@ -33,7 +37,7 @@ const int servoShoulderPin = 7;
 const int servoElbowPin = 6;
 const int servoWristRotatePin = 5;
 const int servoWristLiftPin = 4;
-const int servoGripperPin = 2;
+const int servoGripperPin = 3;
 
 // class/object declarations
 VarSpeedServo servoShoulder;
@@ -53,6 +57,8 @@ void rotateCCW();
 void translate(float dist);
 
 // global variables
+long pingDuration;
+float pingDistance;
 char command; //Receive character commands from remote control system
 const float encoderConstant = 3000;
 const float encoderConstantAngle = 150;
@@ -150,7 +156,7 @@ void loop() {
         break;
 
         case 'a':
-          armReachFront();
+          armReachFront(); //Roach for ground 12 cm ahead of front
         break;
 
         case 'b':
@@ -176,9 +182,9 @@ void loop() {
 
 void armReachFront() {
   servoShoulder.write(40, 20, false);
-  servoElbow.write(110, 20, false);
+  servoElbow.write(80, 20, false);
   servoWristRotation.write(110, 20, false);
-  servoWristLift.write(90, 20, false);
+  servoWristLift.write(70, 20, false);
   //servoGripper.write(45, 10, false);
 }
 
